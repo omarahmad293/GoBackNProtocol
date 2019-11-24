@@ -4,17 +4,17 @@
 #include "protocol.h"
 using namespace std;
 
-#define TIME_UNIT 500
-#define MAX_SEQ 7
+#define TIME_UNIT 500					/* Maximum runtime of the program */
+#define MAX_SEQ 7						/* Window size */
 
-network_layer Network[2];
-physical_layer Physical[2];
-vector<char> Ignores;
-map<unsigned char, int> timeout_list;
+network_layer Network;					/* Simulation of the network layer*/
+vector<char> Ignores;					/* Simulation of the corrupted frames*/
+map<unsigned char, int> timeout_list;	/* Simulation of multiple timers in software */
 
 int main()
 {
-	int Network_Packets;
+	/* Variables used for data input */
+	int Network_Packets;				
 	unsigned char DataString;
 
 	cout << "Enter Number of Packets" << endl;
@@ -24,16 +24,9 @@ int main()
 	for (int i = 0; i < Network_Packets; i++)
 	{
 		cin >> DataString;
-		Init_Network_Layer(0, DataString);
+		Init_Network_Layer(DataString);
 	}
-	/*
-	cout << "Enter Packets of PC 1" << endl;
-	for (int i = 0; i < Network_Packets; i++)
-	{
-		cin >> DataString;
-		Init_Network_Layer(1, DataString);
-	}
-	*/
+
 	cout << "Enter Number of Ignores" << endl;
 	cin >> Network_Packets;
 	cout << "Enter Ignores sequentially" << endl;
@@ -44,17 +37,18 @@ int main()
 		Ignores.push_back(dummy);
 	}
 
+	seq_nr frame_expected = 0;	/* Next frame expected on inbound stream */
+	seq_nr sq = 0;				/* Used for outbound stream */
+	seq_nr ack_expected = 0;    /* Oldest frame as yet unacknowledged */
+	frame ack = {};				/* Ack frame sent to the sender by the receiver*/
+	vector<frame> buffer;		/* Buffers for the outbound stream */
+	frame f;					/* Scratch variable */
 
-	seq_nr frame_expected = 0;
-	seq_nr sq = 0;
-	seq_nr ack_expected = 0;    /*last sent item*/
-	frame ack = {};
-	vector<frame> buffer;
-	frame f;
-
+	/* Simulating a real clock */
 	for (int clock = 0; clock < TIME_UNIT; clock++)
 	{
-		if ((Network[0].info.empty()) && (buffer.empty()))
+		/* Terminate the program */
+		if ((Network.info.empty()) && (buffer.empty()))
 		{
 			cout << "\033[1;32mAll packets are sent succesfully\033[0m" << endl;
 			return 0;
@@ -62,20 +56,24 @@ int main()
 
 		cout << "\033[1;31m" << clock + 1 << "\033[0m" << endl;
 		decrement_timeout();
-		unsigned char timedout = check_timeout();
+		unsigned char timedout = check_timeout();  /* Timedout packet flag*/
 
-		if (timedout != NO_TIMEOUT && clock != 0) //timeout
+		/* Resend data if timeout happened */
+		if (timedout != NO_TIMEOUT && clock != 0)
 		{
 			f = resend_buffer(&buffer);
 			sq = f.seq;
 			timedout = NO_TIMEOUT;
 		}
 
+		/* Correct ACK received */
 		if (ack_expected == ack.seq && clock != 0)
 		{
 			cout << "ACK " << ack.info.data << ack.seq << " was received" << endl;
+			/* Stop timer */
 			timeout_list.erase(ack.info.data);
 
+			/* Remove ACKed frame from the buffer */
 			for (auto it = buffer.begin(); it != buffer.end(); it++)
 			{
 				if (it->seq == ack.seq)
@@ -84,19 +82,19 @@ int main()
 					break;
 				}
 			}
-
 			inc(ack_expected);
 		}
 
-		if (!Network[0].info.empty())
+		/* Send data if network layers isn't empty */
+		if (!Network.info.empty())
 		{
-
 			f = send_data(clock, sq);
 			buffer.push_back(f);
 			inc(sq);
 
 			/*======================================================*/
 
+			/* Simulate corrupted frames */
 			if (!Ignores.empty() && f.info.data == Ignores[0])
 			{
 				cout << f.info.data << " is ignored" << endl;
@@ -104,6 +102,7 @@ int main()
 			}
 			else
 			{
+				/* Receive frame and send ACK */
 				if (check_frame(f, frame_expected))
 				{
 					cout << f.info.data << " is received" << endl;
@@ -121,8 +120,4 @@ int main()
 	}
 
 	return 0;
-
 }
-
-
-//TODO: bidirectional

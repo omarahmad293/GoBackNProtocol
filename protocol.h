@@ -37,7 +37,7 @@ typedef struct
 } network_layer;
 
 
-void Init_Network_Layer(int PC_Number, unsigned char data);
+void Init_Network_Layer(unsigned char data);
 
 frame send_data(int time, seq_nr sq);
 void decrement_timeout();
